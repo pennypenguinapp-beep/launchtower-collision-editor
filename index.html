@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tilemap Collision Editor — LaunchTower</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --panel: #171a23;
+    --panel2: #1d2130;
+    --border: #2a2f42;
+    --text: #e6e9f2;
+    --muted: #8b93ab;
+    --accent: #5b8cff;
+    --solid: #e05252;
+    --oneway: #4fbf6a;
+    --hazard: #e8a13c;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+  }
+  header h1 { font-size: 18px; font-weight: 600; }
+  header p { font-size: 13px; color: var(--muted); margin-top: 4px; }
+  main {
+    flex: 1;
+    padding: 16px 20px 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    max-width: 1100px;
+    width: 100%;
+    margin: 0 auto;
+  }
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+  }
+  .toolbar label { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .toolbar input[type="number"] {
+    width: 70px;
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-size: 13px;
+  }
+  .btn {
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background .15s, border-color .15s;
+  }
+  .btn:hover { background: #242a3d; border-color: #3a4160; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primary:hover { background: #4a7bf0; }
+  .btn.active { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .tool-group { display: flex; gap: 6px; }
+  .tool-btn {
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 13px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .tool-btn .dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+  .tool-btn[data-tool="solid"] .dot { background: var(--solid); }
+  .tool-btn[data-tool="oneway"] .dot { background: var(--oneway); }
+  .tool-btn[data-tool="hazard"] .dot { background: var(--hazard); }
+  .tool-btn[data-tool="erase"] .dot { background: transparent; border: 1px solid var(--muted); }
+  .tool-btn.active { border-color: var(--accent); background: #232a44; }
+  .canvas-wrap {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    overflow: auto;
+    max-height: 65vh;
+    position: relative;
+  }
+  .canvas-wrap .placeholder {
+    color: var(--muted);
+    font-size: 14px;
+    text-align: center;
+    padding: 60px 20px;
+  }
+  .canvas-wrap .placeholder kbd {
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 12px;
+  }
+  #gridCanvas {
+    image-rendering: pixelated;
+    cursor: crosshair;
+    display: block;
+    touch-action: none;
+  }
+  .statusbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    font-size: 12px;
+    color: var(--muted);
+    padding: 0 2px;
+  }
+  .statusbar b { color: var(--text); font-weight: 600; }
+  .export-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+  }
+  .export-row select {
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 7px 10px;
+    font-size: 13px;
+  }
+  .hint { font-size: 12px; color: var(--muted); }
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 14px 20px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  footer a { color: var(--accent); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+  @media (max-width: 640px) {
+    main { padding: 12px; }
+    .toolbar { padding: 10px; }
+    .tool-btn { padding: 7px 9px; font-size: 12px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Tilemap Collision Editor</h1>
+  <p>Upload a tileset, mark tiles as solid, one-way, or hazard, and export the collision mask as JSON or CSV.</p>
+</header>
+
+<main>
+  <div class="toolbar">
+    <label>Tileset
+      <input type="file" id="fileInput" accept="image/png,image/jpeg,image/webp,image/gif">
+    </label>
+    <label>Tile size
+      <input type="number" id="tileSize" min="4" max="512" value="16">
+      px
+    </label>
+    <label>Zoom
+      <input type="number" id="zoom" min="1" max="16" value="4">
+      x
+    </label>
+    <button class="btn" id="clearBtn">Clear marks</button>
+    <span class="hint">Click / drag on the grid to paint. Right-click or <kbd style="background:var(--panel2);border:1px solid var(--border);border-radius:4px;padding:1px 5px;font-size:11px;">E</kbd> to erase.</span>
+  </div>
+
+  <div class="toolbar">
+    <div class="tool-group" id="toolGroup">
+      <button class="tool-btn active" data-tool="solid"><span class="dot"></span>Solid</button>
+      <button class="tool-btn" data-tool="oneway"><span class="dot"></span>One-way</button>
+      <button class="tool-btn" data-tool="hazard"><span class="dot"></span>Hazard</button>
+      <button class="tool-btn" data-tool="erase"><span class="dot"></span>Erase</button>
+    </div>
+    <span class="hint">Keys: <b>1</b> solid, <b>2</b> one-way, <b>3</b> hazard, <b>0/E</b> erase</span>
+  </div>
+
+  <div class="canvas-wrap" id="canvasWrap">
+    <div class="placeholder" id="placeholder">
+      Drop a tileset image here, or click <b>Tileset</b> to browse.<br>
+      Then click tiles to paint collision.
+    </div>
+    <canvas id="gridCanvas" style="display:none;"></canvas>
+  </div>
+
+  <div class="statusbar" id="statusbar" style="display:none;">
+    <span>Grid: <b id="statGrid">–</b></span>
+    <span>Solid: <b id="statSolid">0</b></span>
+    <span>One-way: <b id="statOneway">0</b></span>
+    <span>Hazard: <b id="statHazard">0</b></span>
+    <span>Tile: <b id="statTile">–</b></span>
+  </div>
+
+  <div class="export-row">
+    <button class="btn primary" id="exportJson" disabled>Export JSON</button>
+    <button class="btn" id="exportCsv" disabled>Export CSV</button>
+    <span class="hint">JSON: rows of 0/1/2/3. CSV: same, comma-separated.</span>
+  </div>
+</main>
+
+<footer>
+  Part of the <a href="https://pennypenguinapp-beep.github.io/" target="_blank" rel="noopener">LaunchTower</a> free tools for pixel artists &amp; game devs.
+</footer>
+
+<script>
+(function () {
+  "use strict";
+
+  var canvas = document.getElementById("gridCanvas");
+  var ctx = canvas.getContext("2d");
+  var placeholder = document.getElementById("placeholder");
+  var statusbar = document.getElementById("statusbar");
+  var fileInput = document.getElementById("fileInput");
+  var tileSizeInput = document.getElementById("tileSize");
+  var zoomInput = document.getElementById("zoom");
+  var clearBtn = document.getElementById("clearBtn");
+  var exportJsonBtn = document.getElementById("exportJson");
+  var exportCsvBtn = document.getElementById("exportCsv");
+  var toolGroup = document.getElementById("toolGroup");
+  var canvasWrap = document.getElementById("canvasWrap");
+
+  var img = null;          // loaded tileset image
+  var cols = 0, rows = 0;  // grid dimensions
+  var marks = [];          // 2D array: 0 empty, 1 solid, 2 oneway, 3 hazard
+  var currentTool = "solid";
+  var painting = false;
+  var lastPainted = null;
+
+  var COLORS = {
+    1: "rgba(224, 82, 82, 0.55)",
+    2: "rgba(79, 191, 106, 0.55)",
+    3: "rgba(232, 161, 60, 0.55)"
+  };
+  var GRID_LINE = "rgba(255,255,255,0.10)";
+  var GRID_LINE_STRONG = "rgba(255,255,255,0.22)";
+
+  function tileSize() { return Math.max(4, parseInt(tileSizeInput.value, 10) || 16); }
+  function zoom() { return Math.max(1, parseInt(zoomInput.value, 10) || 4); }
+
+  function loadFile(file) {
+    if (!file) return;
+    var url = URL.createObjectURL(file);
+    var im = new Image();
+    im.onload = function () {
+      img = im;
+      URL.revokeObjectURL(url);
+      rebuildGrid();
+    };
+    im.onerror = function () {
+      alert("Could not read that image. Try PNG, JPG, WebP, or GIF.");
+      URL.revokeObjectURL(url);
+    };
+    im.src = url;
+  }
+
+  function rebuildGrid() {
+    if (!img) return;
+    var ts = tileSize();
+    cols = Math.max(1, Math.floor(img.naturalWidth / ts));
+    rows = Math.max(1, Math.floor(img.naturalHeight / ts));
+    marks = [];
+    for (var y = 0; y < rows; y++) {
+      var row = [];
+      for (var x = 0; x < cols; x++) row.push(0);
+      marks.push(row);
+    }
+    canvas.style.display = "block";
+    placeholder.style.display = "none";
+    statusbar.style.display = "flex";
+    exportJsonBtn.disabled = false;
+    exportCsvBtn.disabled = false;
+    draw();
+  }
+
+  function draw() {
+    if (!img) return;
+    var ts = tileSize();
+    var z = zoom();
+    var cell = ts * z;
+    canvas.width = cols * cell;
+    canvas.height = rows * cell;
+
+    // draw tileset scaled
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(img, 0, 0, cols * ts, rows * ts, 0, 0, canvas.width, canvas.height);
+
+    // marks
+    for (var y = 0; y < rows; y++) {
+      for (var x = 0; x < cols; x++) {
+        var v = marks[y][x];
+        if (v) {
+          ctx.fillStyle = COLORS[v];
+          ctx.fillRect(x * cell, y * cell, cell, cell);
+        }
+      }
+    }
+
+    // grid lines
+    ctx.strokeStyle = GRID_LINE;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (var gx = 0; gx <= cols; gx++) {
+      var px = Math.round(gx * cell) + 0.5;
+      ctx.moveTo(px, 0);
+      ctx.lineTo(px, canvas.height);
+    }
+    for (var gy = 0; gy <= rows; gy++) {
+      var py = Math.round(gy * cell) + 0.5;
+      ctx.moveTo(0, py);
+      ctx.lineTo(canvas.width, py);
+    }
+    ctx.stroke();
+
+    // stronger lines every 8 tiles
+    ctx.strokeStyle = GRID_LINE_STRONG;
+    ctx.beginPath();
+    for (var sx = 0; sx <= cols; sx += 8) {
+      var sxx = Math.round(sx * cell) + 0.5;
+      ctx.moveTo(sxx, 0);
+      ctx.lineTo(sxx, canvas.height);
+    }
+    for (var sy = 0; sy <= rows; sy += 8) {
+      var syy = Math.round(sy * cell) + 0.5;
+      ctx.moveTo(0, syy);
+      ctx.lineTo(canvas.width, syy);
+    }
+    ctx.stroke();
+
+    updateStats();
+  }
+
+  function updateStats() {
+    var solid = 0, oneway = 0, hazard = 0;
+    for (var y = 0; y < rows; y++) {
+      for (var x = 0; x < cols; x++) {
+        var v = marks[y][x];
+        if (v === 1) solid++;
+        else if (v === 2) oneway++;
+        else if (v === 3) hazard++;
+      }
+    }
+    document.getElementById("statGrid").textContent = cols + " × " + rows;
+    document.getElementById("statSolid").textContent = solid;
+    document.getElementById("statOneway").textContent = oneway;
+    document.getElementById("statHazard").textContent = hazard;
+  }
+
+  function tileAt(clientX, clientY) {
+    var rect = canvas.getBoundingClientRect();
+    var ts = tileSize();
+    var z = zoom();
+    var cell = ts * z;
+    var x = Math.floor((clientX - rect.left) / cell);
+    var y = Math.floor((clientY - rect.top) / cell);
+    if (x < 0 || y < 0 || x >= cols || y >= rows) return null;
+    return { x: x, y: y };
+  }
+
+  function paint(t) {
+    if (!t) return;
+    var key = t.x + "," + t.y;
+    if (key === lastPainted) return;
+    lastPainted = key;
+    var val = currentTool === "erase" ? 0 :
+              currentTool === "solid" ? 1 :
+              currentTool === "oneway" ? 2 : 3;
+    if (marks[t.y][t.x] === val) return;
+    marks[t.y][t.x] = val;
+    draw();
+  }
+
+  function setTool(tool) {
+    currentTool = tool;
+    var btns = toolGroup.querySelectorAll(".tool-btn");
+    for (var i = 0; i < btns.length; i++) {
+      btns[i].classList.toggle("active", btns[i].getAttribute("data-tool") === tool);
+    }
+  }
+
+  // events
+  fileInput.addEventListener("change", function (e) {
+    if (e.target.files && e.target.files[0]) loadFile(e.target.files[0]);
+  });
+
+  canvasWrap.addEventListener("dragover", function (e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+  });
+  canvasWrap.addEventListener("drop", function (e) {
+    e.preventDefault();
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
+  });
+
+  tileSizeInput.addEventListener("change", rebuildGrid);
+  zoomInput.addEventListener("input", draw);
+
+  clearBtn.addEventListener("click", function () {
+    if (!marks.length) return;
+    if (!confirm("Clear all collision marks?")) return;
+    for (var y = 0; y < rows; y++)
+      for (var x = 0; x < cols; x++) marks[y][x] = 0;
+    draw();
+  });
+
+  toolGroup.addEventListener("click", function (e) {
+    var btn = e.target.closest(".tool-btn");
+    if (btn) setTool(btn.getAttribute("data-tool"));
+  });
+
+  document.addEventListener("keydown", function (e) {
+    if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
+    if (e.key === "1") setTool("solid");
+    else if (e.key === "2") setTool("oneway");
+    else if (e.key === "3") setTool("hazard");
+    else if (e.key === "0" || e.key.toLowerCase() === "e") setTool("erase");
+  });
+
+  // pointer painting (mouse + touch)
+  canvas.addEventListener("pointerdown", function (e) {
+    e.preventDefault();
+    painting = true;
+    lastPainted = null;
+    if (e.button === 2) {
+      // right-click erases regardless of tool
+      var prev = currentTool;
+      currentTool = "erase";
+      paint(tileAt(e.clientX, e.clientY));
+      currentTool = prev;
+      return;
+    }
+    paint(tileAt(e.clientX, e.clientY));
+    canvas.setPointerCapture(e.pointerId);
+  });
+  canvas.addEventListener("pointermove", function (e) {
+    if (!painting) return;
+    paint(tileAt(e.clientX, e.clientY));
+  });
+  canvas.addEventListener("pointerup", function () { painting = false; lastPainted = null; });
+  canvas.addEventListener("pointercancel", function () { painting = false; lastPainted = null; });
+  canvas.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+
+  canvas.addEventListener("mousemove", function (e) {
+    var t = tileAt(e.clientX, e.clientY);
+    document.getElementById("statTile").textContent = t ? (t.x + ", " + t.y) : "–";
+  });
+
+  // export
+  function buildRows() {
+    return marks.map(function (r) { return r.slice(); });
+  }
+
+  exportJsonBtn.addEventListener("click", function () {
+    if (!marks.length) return;
+    var data = {
+      tile_size: tileSize(),
+      width: cols,
+      height: rows,
+      legend: { 0: "empty", 1: "solid", 2: "oneway", 3: "hazard" },
+      grid: buildRows()
+    };
+    downloadBlob(JSON.stringify(data, null, 2), "collision.json", "application/json");
+  });
+
+  exportCsvBtn.addEventListener("click", function () {
+    if (!marks.length) return;
+    var lines = ["# tile_size=" + tileSize() + ", width=" + cols + ", height=" + rows];
+    lines.push("0=empty,1=solid,2=oneway,3=hazard");
+    for (var y = 0; y < rows; y++) lines.push(marks[y].join(","));
+    downloadBlob(lines.join("\n"), "collision.csv", "text/csv");
+  });
+
+  function downloadBlob(text, filename, mime) {
+    var blob = new Blob([text], { type: mime });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  }
+})();
+</script>
+</body>
+</html>
