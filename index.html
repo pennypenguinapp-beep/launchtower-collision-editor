@@ -183,6 +183,7 @@
       <input type="number" id="zoom" min="1" max="16" value="4">
       x
     </label>
+    <button class="btn primary" id="loadExample">Load example</button>
     <button class="btn" id="clearBtn">Clear marks</button>
     <span class="hint">Click / drag on the grid to paint. Right-click or <kbd style="background:var(--panel2);border:1px solid var(--border);border-radius:4px;padding:1px 5px;font-size:11px;">E</kbd> to erase.</span>
   </div>
@@ -273,6 +274,32 @@
       URL.revokeObjectURL(url);
     };
     im.src = url;
+  }
+
+  function loadExample() {
+    var ts = 16;
+    var c = document.createElement("canvas");
+    c.width = 64; c.height = 32;
+    var g = c.getContext("2d");
+    var palette = ["#e05252", "#4fbf6a", "#e8a13c", "#5b8cff", "#b06ad4", "#3fc7c7", "#d4d4d4", "#8a5a2b"];
+    for (var ty = 0; ty < 2; ty++) {
+      for (var tx = 0; tx < 4; tx++) {
+        var i = ty * 4 + tx;
+        g.fillStyle = palette[i];
+        g.fillRect(tx * ts, ty * ts, ts, ts);
+        g.fillStyle = "rgba(0,0,0,0.35)";
+        if (i % 2 === 0) { g.fillRect(tx * ts + 4, ty * ts + 4, 8, 8); }
+        else { g.fillRect(tx * ts + 2, ty * ts + 10, 12, 4); }
+        g.fillStyle = "rgba(255,255,255,0.5)";
+        g.fillRect(tx * ts + 2, ty * ts + 2, 3, 3);
+      }
+    }
+    var im = new Image();
+    im.onload = function () {
+      img = im;
+      rebuildGrid();
+    };
+    im.src = c.toDataURL("image/png");
   }
 
   function rebuildGrid() {
@@ -415,6 +442,8 @@
 
   tileSizeInput.addEventListener("change", rebuildGrid);
   zoomInput.addEventListener("input", draw);
+
+  document.getElementById("loadExample").addEventListener("click", loadExample);
 
   clearBtn.addEventListener("click", function () {
     if (!marks.length) return;
